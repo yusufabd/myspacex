@@ -1,20 +1,63 @@
 package me.stayplus.myspacex.androidApp
 
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import me.stayplus.myspacex.shared.Greeting
-import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.isVisible
+import androidx.recyclerview.widget.LinearLayoutManager
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import me.stayplus.myspacex.androidApp.databinding.ActivityMainBinding
+import me.stayplus.myspacex.shared.SpaceXSDK
+import me.stayplus.myspacex.shared.cache.DatabaseDriverFactory
 
-fun greet(): String {
-    return Greeting().greeting()
-}
 
 class MainActivity : AppCompatActivity() {
+    private lateinit var binding: ActivityMainBinding
+    private val mainScope = MainScope()
+
+    private val sdk = SpaceXSDK(DatabaseDriverFactory(this))
+    private val adapter = LaunchesAdapter(listOf())
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        binding = ActivityMainBinding.inflate(layoutInflater)
+        setTitle(R.string.space_x_launches)
+        setContentView(binding.root)
 
-        val tv: TextView = findViewById(R.id.text_view)
-        tv.text = greet()
+        binding.recyclerView.layoutManager = LinearLayoutManager(this)
+        binding.recyclerView.adapter = adapter
+
+        binding.swipeRefreshLayout.setOnRefreshListener {
+            binding.swipeRefreshLayout.isRefreshing = false
+            adapter.apply {
+                launches = listOf()
+                notifyDataSetChanged()
+            }
+            displayLaunches(true)
+        }
+
+        displayLaunches(false)
+    }
+
+    private fun displayLaunches(forceReload: Boolean) {
+        binding.progressBar.isVisible = true
+        mainScope.launch {
+            kotlin.runCatching {
+                sdk.getLaunches(forceReload)
+            }.onSuccess {
+                adapter.apply {
+                    launches = it
+                    notifyDataSetChanged()
+                }
+            }.onFailure {
+                Toast.makeText(
+                    this@MainActivity,
+                    it.localizedMessage,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            binding.progressBar.isVisible = false
+        }
     }
 }
